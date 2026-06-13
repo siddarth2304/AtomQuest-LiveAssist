@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  AGENT
+  ADMIN
+}
+
+enum SessionStatus {
+  CREATED
+  ACTIVE
+  ENDED
+}
+
+enum ParticipantRole {
+  AGENT
+  CUSTOMER
+}
+
+enum ParticipantState {
+  JOINED
+  RECONNECTING
+  LEFT
+}
+
+enum MessageType {
+  TEXT
+  FILE
+  SYSTEM
+}
+
+enum RecordingStatus {
+  IDLE
+  RECORDING
+  PROCESSING
+  READY
+  FAILED
+}
+
+model User {
+  id           String           @id @default(cuid())
+  email        String           @unique
+  passwordHash String
+  name         String
+  role         Role             @default(AGENT)
+  createdAt    DateTime         @default(now())
+  sessions     SupportSession[]
+}
+
+model SupportSession {
+  id              String          @id @default(cuid())
+  title           String
+  inviteToken     String          @unique
+  livekitRoom     String          @unique
+  status          SessionStatus   @default(CREATED)
+  createdAt       DateTime        @default(now())
+  startedAt       DateTime?
+  endedAt         DateTime?
+  createdById     String
+  createdBy       User            @relation(fields: [createdById], references: [id])
+  participants    Participant[]
+  messages        Message[]
+  files           FileShare[]
+  recordings      Recording[]
+  events          EventLog[]
+}
+
+model Participant {
+  id          String           @id @default(cuid())
+  sessionId   String
+  session     SupportSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role        ParticipantRole
+  name        String
+  socketId    String?
+  state       ParticipantState @default(JOINED)
+  joinedAt    DateTime?
+  leftAt      DateTime?
+  lastSeenAt  DateTime?
+  createdAt   DateTime         @default(now())
+}
+
+model Message {
+  id          String         @id @default(cuid())
+  sessionId   String
+  session     SupportSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  senderRole  ParticipantRole
+  senderName  String
+  type        MessageType    @default(TEXT)
+  body        String
+  fileId      String?
+  file        FileShare?     @relation(fields: [fileId], references: [id])
+  createdAt   DateTime       @default(now())
+}
+
+model FileShare {
+  id          String         @id @default(cuid())
+  sessionId   String
+  session     SupportSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  uploaderRole ParticipantRole
+  uploaderName String
+  fileName    String
+  mimeType    String
+  size        Int
+  url         String
+  createdAt   DateTime       @default(now())
+  messages    Message[]
+}
+
+model Recording {
+  id          String          @id @default(cuid())
+  sessionId   String
+  session     SupportSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  status      RecordingStatus @default(IDLE)
+  url         String?
+  fileName    String?
+  size        Int?
+  startedAt   DateTime?
+  endedAt     DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+model EventLog {
+  id          String         @id @default(cuid())
+  sessionId   String
+  session     SupportSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  type        String
+  actorRole   ParticipantRole?
+  actorName   String?
+  metadata    Json?
+  createdAt   DateTime       @default(now())
+}
+
+model MetricCounter {
+  key   String @id
+  value Int    @default(0)
+}
